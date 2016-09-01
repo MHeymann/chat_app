@@ -38,7 +38,28 @@ users_t *new_users()
 	return users;
 }
 
-/* remember to free the queue appropriately */
+void free_users(users_t *users)
+{
+	if (!users) {
+		return;
+	}
+	if (users->names) {
+		free_string_hashset(users->names);
+		users->names = NULL;
+	}
+	if (users->sockets) {
+		free_fd_hashset(users->sockets);
+		users->sockets = NULL;
+	}
+	if (users->hs_protect) {
+		pthread_mutex_destroy(users->hs_protect);
+		free(users->hs_protect);
+		users->hs_protect = NULL;
+	}
+	free(users);
+}
+
+/* remember to free this queue appropriately */
 queue_t *get_names(users_t *users)
 {
 	queue_t *q = NULL;
@@ -49,6 +70,20 @@ queue_t *get_names(users_t *users)
 
 	return q;
 }
+
+/* remember to free this queue appropriately */
+queue_t *get_fds(users_t *users)
+{
+	queue_t *q = NULL;
+
+	pthread_mutex_lock(users->hs_protect);
+	q = fdhs_get_keys(users->sockets);
+	pthread_mutex_unlock(users->hs_protect);
+
+	return q;
+}
+
+
 
 void users_send_packet(users_t *users, packet_t *packet)
 {
@@ -105,6 +140,8 @@ void remove_name(users_t *users, char *name)
 		pthread_mutex_unlock(users->hs_protect);
 		return;
 	}
+	/*
+	*/
 	string_hashset_remove(users->names, name);
 
 	printf("User '%s' went offline, %d still online\n", name, 
@@ -113,7 +150,20 @@ void remove_name(users_t *users, char *name)
 	pthread_mutex_unlock(users->hs_protect);
 }
 
-int add_connection(users_t *users, char *name, int fd)
+int add_connection(users_t *users,int fd)
+{
+	pthread_mutex_lock(users->hs_protect);
+
+	if (!fd_hashset_insert(users->sockets, fd, "")) {
+		printf("failed to insert into socket list");
+		return 0;
+	}
+
+	pthread_mutex_unlock(users->hs_protect);
+	return 1;
+}
+
+int login_connection(users_t *users, int fd, char *name)
 {
 	pthread_mutex_lock(users->hs_protect);
 
@@ -121,12 +171,12 @@ int add_connection(users_t *users, char *name, int fd)
 		printf("failed to insert into name list");
 		return 0;
 	}
-	if (!fd_hashset_insert(users->sockets, fd, name)) {
-		printf("failed to insert into socket list");
-		return 0;
-	}
 
 	pthread_mutex_unlock(users->hs_protect);
+	/*
+	remove_channel(users, fd);
+	*/
+
 	return 1;
 }
 

@@ -27,11 +27,11 @@ typedef struct string_hashset {
 /*** Helper Function Prototypes ******************************************/
 
 unsigned long hash_string(void *key, unsigned int size);
-int cmp_strings(void *a, void *b);
-void val2str(void *key, void *val, char *buffer);
-void dud_free(void *);
-char *strdup(char *s);
-void *copy_key(void *key);
+int cmp_s_strings(void *a, void *b);
+void s_val2str(void *key, void *val, char *buffer);
+void s_dud_free(void *);
+char *s_strdup(char *s);
+void *copy_s_key(void *key);
 
 /*** Functions ***********************************************************/
 
@@ -68,7 +68,7 @@ void string_hashset_init(string_hashset_ptr *hs, int init_delta, int delta_diff)
 		return;
 	}
 
-	ht = ht_init(0.75f, init_delta, delta_diff, hash_string, cmp_strings);
+	ht = ht_init(0.75f, init_delta, delta_diff, hash_string, cmp_s_strings);
 	if (!ht) {
 		fprintf(stderr, "Error initializing hashtable.\n");
 		free(hset);
@@ -94,7 +94,7 @@ void string_hashset_init(string_hashset_ptr *hs, int init_delta, int delta_diff)
 int string_hashset_insert(string_hashset_ptr hs, char *skey, int fdvalue)
 {
 	int insert_status;
-	char *scopy = strdup(skey);
+	char *scopy = s_strdup(skey);
 	long fdl;
 	if (!scopy) {
 		fprintf(stderr, "failed to copy string\n");
@@ -129,7 +129,7 @@ int string_hashset_insert(string_hashset_ptr hs, char *skey, int fdvalue)
 
 void string_hashset_remove(string_hashset_ptr hs, char *key)
 {
-	ht_remove(hs->ht, (void *)key, free, dud_free);
+	ht_remove(hs->ht, (void *)key, free, s_dud_free);
 }
 
 int name_get_fd(string_hashset_t *shs, char *name)
@@ -202,7 +202,7 @@ int string_hashset_content_count(string_hashset_ptr hs)
  */
 void print_string_hashset(string_hashset_ptr hs)
 {
-	print_ht(hs->ht, val2str);	
+	print_ht(hs->ht, s_val2str);	
 }
 
 /**
@@ -212,22 +212,22 @@ void print_string_hashset(string_hashset_ptr hs)
  */
 void free_string_hashset(string_hashset_ptr hs)
 {
-	ht_free(hs->ht, free, dud_free);
+	ht_free(hs->ht, free, s_dud_free);
 	hs->ht = NULL;
 	free(hs);
 }
 
 queue_t *shs_get_keys(string_hashset_t *s_hs)
 {
-	return get_keys(s_hs->ht, copy_key, cmp_strings, free);
+	return get_keys(s_hs->ht, copy_s_key, cmp_s_strings, free);
 }
 
 
 /*** Helper Functions ****************************************************/
 
-void *copy_key(void *key)
+void *copy_s_key(void *key)
 {
-	return (void *)strdup((char *)key);
+	return (void *)s_strdup((char *)key);
 }
 
 /**
@@ -240,7 +240,7 @@ void *copy_key(void *key)
  * @param[out] buffer The char pointer where the string representation 
  * of the pair will be put.  
  */
-void val2str(void *key, void *val, char *buffer)
+void s_val2str(void *key, void *val, char *buffer)
 {
 	char *name = (char *)key;
 	long fd = (long) val;
@@ -262,7 +262,7 @@ void val2str(void *key, void *val, char *buffer)
  *
  * @param[in] key The key that doesn't need freeing. 
  */
-void dud_free(void *key) 
+void s_dud_free(void *key) 
 {
 	if ((long)key & 0) {
 		return;
@@ -305,13 +305,13 @@ unsigned long hash_string(void *key, unsigned int size)
  *  @return An integer value, 0 if the two strings are identical
  *  less than 0 if a comes before b and more than 0 otherwise. 
  */
-int cmp_strings(void *a, void *b) 
+int cmp_s_strings(void *a, void *b) 
 {
 	return strcmp((char *)a, (char *)b);
 }
 
 
-char *strdup(char *s) {
+char *s_strdup(char *s) {
 	int i;
 	int len = strlen(s);
 	char *scopy = malloc(len + 1);

@@ -27,10 +27,12 @@ typedef struct fd_hashset {
 /*** Helper Function Prototypes ******************************************/
 
 unsigned long hash_string(void *key, unsigned int size);
-int cmp_strings(void *a, void *b);
-void val2str(void *key, void *val, char *buffer);
-void dud_free(void *);
-char *strdup(char *s);
+int cmp_fd_strings(void *a, void *b);
+void fd_val2str(void *key, void *val, char *buffer);
+void fd_dud_free(void *);
+char *fd_strdup(char *s);
+void *copy_fd_key(void *a);
+int cmp_fds(void *a, void *b);
 
 /*** Functions ***********************************************************/
 
@@ -67,7 +69,7 @@ void fd_hashset_init(fd_hashset_ptr *hs, int init_delta, int delta_diff)
 		return;
 	}
 
-	ht = ht_init(0.75f, init_delta, delta_diff, hash_string, cmp_strings);
+	ht = ht_init(0.75f, init_delta, delta_diff, hash_string, cmp_fd_strings);
 	if (!ht) {
 		fprintf(stderr, "Error initializing hashtable.\n");
 		free(hset);
@@ -93,7 +95,7 @@ void fd_hashset_init(fd_hashset_ptr *hs, int init_delta, int delta_diff)
 int fd_hashset_insert(fd_hashset_ptr hs, int fdkey, char *svalue)
 {
 	int insert_status;
-	char *scopy = strdup(svalue);
+	char *scopy = fd_strdup(svalue);
 	long fdl;
 	if (!scopy) {
 		fprintf(stderr, "failed to copy string\n");
@@ -129,7 +131,7 @@ int fd_hashset_insert(fd_hashset_ptr hs, int fdkey, char *svalue)
 void fd_hashset_remove(fd_hashset_ptr hs, int key)
 {
 	long lkey = (long) key;
-	ht_remove(hs->ht, (void *)lkey, dud_free, free);
+	ht_remove(hs->ht, (void *)lkey, fd_dud_free, free);
 }
 
 char *fd_get_name(fd_hashset_t *fdhs, int fd) 
@@ -137,7 +139,7 @@ char *fd_get_name(fd_hashset_t *fdhs, int fd)
 	void *name = NULL;
 	long fdl = fd;
 	if (ht_lookup(fdhs->ht, (void *)fdl, &name)) {
-		return strdup((char *)name);
+		return fd_strdup((char *)name);
 	} else {
 		return NULL;
 	}
@@ -164,7 +166,7 @@ int fd_hashset_content_count(fd_hashset_ptr hs)
  */
 void print_fd_hashset(fd_hashset_ptr hs)
 {
-	print_ht(hs->ht, val2str);	
+	print_ht(hs->ht, fd_val2str);	
 }
 
 /**
@@ -175,13 +177,28 @@ void print_fd_hashset(fd_hashset_ptr hs)
 void free_fd_hashset(fd_hashset_ptr hs)
 {
 	/* TODO: close file descriptor? */
-	ht_free(hs->ht, dud_free, free);
+	ht_free(hs->ht, fd_dud_free, free);
 	hs->ht = NULL;
 	free(hs);
 }
 
+queue_t *fdhs_get_keys(fd_hashset_ptr fd_hs)
+{
+	return get_keys(fd_hs->ht, copy_fd_key, cmp_fds, free);
+}
 
 /*** Helper Functions ****************************************************/
+
+void *copy_fd_key(void *a)
+{
+	long b = (long)a;
+	return (void *)b;
+}
+
+int cmp_fds(void *a, void *b) 
+{
+	return ((long)a - (long)b);
+}
 
 /**
  * Get a string representation of a key value pair, to be put in buffer.
@@ -193,7 +210,7 @@ void free_fd_hashset(fd_hashset_ptr hs)
  * @param[out] buffer The char pointer where the string representation 
  * of the pair will be put.  
  */
-void val2str(void *key, void *val, char *buffer)
+void fd_val2str(void *key, void *val, char *buffer)
 {
 	char *name = (char *)val;
 	long fd = (long) key;
@@ -215,7 +232,7 @@ void val2str(void *key, void *val, char *buffer)
  *
  * @param[in] key The key that doesn't need freeing. 
  */
-void dud_free(void *key) 
+void fd_dud_free(void *key) 
 {
 	if ((long)key & 0) {
 		return;
@@ -251,13 +268,13 @@ unsigned long hash_fd(void *key, unsigned int size)
  *  @return An integer value, 0 if the two strings are identical
  *  less than 0 if a comes before b and more than 0 otherwise. 
  */
-int cmp_strings(void *a, void *b) 
+int cmp_fd_strings(void *a, void *b) 
 {
 	return strcmp((char *)a, (char *)b);
 }
 
 
-char *strdup(char *s) {
+char *fd_strdup(char *s) {
 	int i;
 	int len = strlen(s);
 	char *scopy = malloc(len + 1);

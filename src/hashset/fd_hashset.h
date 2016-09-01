@@ -87,4 +87,6 @@ void print_fd_hashset(fd_hashset_ptr hs);
  */
 void free_fd_hashset(fd_hashset_ptr hs);
 
+queue_t *fdhs_get_keys(fd_hashset_ptr s_hs);
+
 #endif

@@ -8,41 +8,117 @@
 #include <sys/time.h>
 #include <errno.h>
 
+#include "server_listener.h"
+#include "users.h"
+#include "../packet/code.h"
+#include "../hashset/fd_hashset.h"
+#include "../hashset/string_hashset.h"
+
 /*** Macros **************************************************************/
 
 #define BUFFER_SIZE		2048
-#define DEFAULT_PORT	8080
+#define DEFAULT_PORT	8008
 #define TRUE			1
 #define FALSE			0
-/* TODO: less hardcoded with hashtable */
 #define MAX_CLIENTS		(int) sizeof(long)
+
+#define PORT_COUNT(A)	(sizeof(A) / sizeof(int))
 	
 
-/*
-pthread_t *threads = NULL;
-int thread_count = -1;
-int running = TRUE;
-pthread_mutex_t *thread_lock = NULL;
-pthread_mutex_t *running_lock = NULL;
-*/
-int port;
+/*** Helper Function Prototypes ******************************************/
 
-/*** Function Prototypes *************************************************/
+void listener_go(server_listener_t *listener);
+int check_user_password(char *name, char *pw);
 
-/*
-void *connection_handler(void *socket_desc);
-void *terminal_manager(void *some_pointer);
-int init_globals();
-void free_globals();
-*/
+/*** Functions ***********************************************************/
 
-/*** Main Routine ********************************************************/
+server_listener_t *new_server_listener(int *ports, users_t *users, 
+		server_speaker_t *speaker)
+{
+	server_listener_t *listener = NULL;
 
-int main(int argc, char *argv[])
+	if (!users) {
+		fprintf(stderr, "Error: no users_t * provided\n");
+		return NULL;
+	}
+	if (!speaker) {
+		fprintf(stderr, "Error: no speaker provided\n");
+		return NULL;
+	}
+
+	if (!ports) {
+		ports = malloc(sizeof(int));
+		ports[0] = 8002;
+		printf("Listener defaulting to port 8002\n");
+	}
+
+	listener = malloc(sizeof(server_listener_t));
+	if (!listener) {
+		fprintf(stderr, "error mallocing listener\n");
+		return NULL;
+	}
+	listener->ports = ports;
+	listener->run_status = TRUE;
+	listener->status_lock = malloc(sizeof(pthread_mutex_t));
+	pthread_mutex_init(listener->status_lock, NULL);
+	listener->users = users;
+	listener->speaker = speaker;
+
+	return listener;
+}
+
+void server_listener_free(server_listener_t *listener)
+{
+	if (listener->ports) {
+		free(listener->ports);
+		listener->ports = NULL;
+	}
+	if (listener->status_lock) {
+		pthread_mutex_destroy(listener->status_lock);
+		free(listener->status_lock);
+		listener->status_lock = NULL;
+	}
+	if (listener->users) {
+		free_users(listener->users);
+		listener->users = NULL;
+	}
+	if (listener->speaker) {
+		/* this gets free'd in main */
+		listener->speaker = NULL;
+	}
+}
+
+void *listener_run(void *listener) 
+{
+	if (!listener) {
+	} else {
+		listener_go((server_listener_t *)listener);
+	}
+	return NULL;
+}
+
+void listener_stop(server_listener_t *listener)
+{
+	pthread_mutex_lock(listener->status_lock);
+	listener->run_status = FALSE;
+	pthread_mutex_unlock(listener->status_lock);
+}
+
+int listener_running(server_listener_t *listener)
+{
+	int status;
+	pthread_mutex_lock(listener->status_lock);
+	status = listener->run_status;
+	pthread_mutex_unlock(listener->status_lock);
+	return status;
+}
+
+/*** Helper Functions ****************************************************/
+
+void listener_go(server_listener_t *listener)
 {
 	int master_socket = -1, new_socket = -1, i = 0;
-	int valread = -1, sd = 0;
-	int client_socket[MAX_CLIENTS];
+	int sd = 0;
 	int opt = TRUE;
 	int addrlen = -1;
 	int activity;
@@ -50,65 +126,51 @@ int main(int argc, char *argv[])
 	struct sockaddr_in address;
 	char *message = NULL;
 	unsigned int write_bytes;
-	char *endptr;
-	char buffer[BUFFER_SIZE];
 	fd_set readfds;
+	int port_count;
+	queue_t *online_list2 = NULL;
+	node_t *n = NULL;
 
-	port = DEFAULT_PORT;
+	packet_t *packet = NULL;
+	packet_t *p = NULL;
 
-	if (argc > 1) {
-		port = strtol(argv[1], &endptr, 10);
-		if (endptr == argv[1]) {
-			printf("Please provide a valid port number.\n");
-			printf("Defaulting to port %d\n", DEFAULT_PORT);
-			port = DEFAULT_PORT;
+	port_count = PORT_COUNT(listener->ports);
+
+
+	for (i = 0; i < port_count; i++) {
+	/* Create master sockets */
+		if ((master_socket = socket(AF_INET, SOCK_STREAM, 0)) <= 0) {
+			perror("socket failed\n");
+			exit(EXIT_FAILURE);
 		}
-	}
+		printf("Port %d selected\n", listener->ports[i]);
+		/* good habit, not necessary: set master socket to allow multiple
+		 * connections/
+		 */
+		if (setsockopt(master_socket, SOL_SOCKET, SO_REUSEADDR, (char *)&opt, sizeof(opt)) < 0) {
+			perror("setsockopt\n");
+			exit(EXIT_FAILURE);
+		}
+	
+		address.sin_family = AF_INET;
+		address.sin_addr.s_addr = htonl(INADDR_ANY);
+		address.sin_port = htons(listener->ports[i]);
+	
+		/* Bind */
+		if (bind(master_socket, (struct sockaddr *)&address, 
+					sizeof(address)) < 0) {
+			perror("bind failed\n");
+			exit(EXIT_FAILURE);
+		}
+		printf("Bind to %d done\n", listener->ports[i]);
+	
+		/* listen */
+		if (listen(master_socket, 3) < 0) {
+			perror("listen\n");
+			exit(EXIT_FAILURE);
+		}
 
-	printf("Port %d selected\n", port);
-
-	/*
-	if (!init_globals()) {
-		free_globals();
-		exit(1);
-	}
-	*/
-
-	for (i = 0; i < MAX_CLIENTS; i++) {
-		client_socket[i] = 0;
-	}
-	;
-
-	/* Create master socket */
-	if ((master_socket = socket(AF_INET, SOCK_STREAM, 0)) <= 0) {
-		perror("socket failed\n");
-		exit(EXIT_FAILURE);
-	}
-
-	/* good habit, not necessary: set master socket to allow multiple
-	 * connections/
-	 */
-	if (setsockopt(master_socket, SOL_SOCKET, SO_REUSEADDR, (char *)&opt, sizeof(opt)) < 0) {
-		perror("setsockopt\n");
-		exit(EXIT_FAILURE);
-	}
-
-	address.sin_family = AF_INET;
-	address.sin_addr.s_addr = htonl(INADDR_ANY);
-	address.sin_port = htons(port);
-
-	/* Bind */
-	if (bind(master_socket, (struct sockaddr *)&address, 
-				sizeof(address)) < 0) {
-		perror("bind failed\n");
-		return 2;
-	}
-	printf("Bind to %d done\n", port);
-
-	/* listen */
-	if (listen(master_socket, 3) < 0) {
-		perror("listen\n");
-		exit(EXIT_FAILURE);
+		listener->ports[i] = master_socket;
 	}
 
 
@@ -116,26 +178,55 @@ int main(int argc, char *argv[])
 	printf("Waiting for incoming connections...\n");
 	addrlen = sizeof(address);
 	while (TRUE) {
-		/*
-	while ((new_socket = accept(socket_desc, (struct sockaddr*)&client,
-					(socklen_t *)&addrlen))) {
-					*/
 		/* clear the socket set */
 		FD_ZERO(&readfds);
 
-		/* add master for listening */
-		FD_SET(master_socket, &readfds);
-		max_sd = master_socket;
+		max_sd = 0;
+		for (i = 0; i < port_count; i++) {
+		/* add masters for listening */
+			FD_SET(listener->ports[i], &readfds);
+			if (max_sd < listener->ports[i]) {
+				max_sd = listener->ports[i];
+			}
+		}
+
+		/* get a list of those currently online */
+		/*
+		online_list1 = get_names(listener->users);
+		if (!online_list1) {
+			fprintf(stderr, "failed to get names\n");
+			exit(EXIT_FAILURE);
+		}
+		*/
+
 
 		/* all sockets currently opened added to set */
-		for (i = 0; i < MAX_CLIENTS; i++) {
-			sd = client_socket[i];
-
-			if (sd > 0) {
-				FD_SET(sd, &readfds);
+		/*
+		for (n = online_list1->head; n; n = n->next) {
+			name_ptr = (char *)n->data;
+			sd = name_get_fd(listener->users->names, name_ptr);
+			if (sd <= 0) {
+				printf("this shouldn't be possible when translating a name to an sd.\n");
+				continue;
 			}
+			FD_SET(sd, &readfds);
 
-			if (sd > max_sd) {
+			if (max_sd < sd) {
+				max_sd = sd;
+			}
+		}
+		*/
+
+		online_list2 = get_fds(listener->users);
+		for (n = online_list2->head; n; n = n->next) {
+			sd = (int)((long)n->data);
+			if (sd <= 0) {
+				printf("this shouldn't be possible when translating a name to an sd.\n");
+				continue;
+			}
+			FD_SET(sd, &readfds);
+
+			if (max_sd < sd) {
 				max_sd = sd;
 			}
 		}
@@ -147,210 +238,92 @@ int main(int argc, char *argv[])
 			printf("select error\n");
 		}
 
-		/* master socket, => incoming connection */
-		if (FD_ISSET(master_socket, &readfds)) {
-			if ((new_socket = accept(master_socket, 
-							(struct sockaddr *)&address,
-							(socklen_t *)&addrlen)) < 0) {
-				perror("accept\n");
-				exit(EXIT_FAILURE);
-			}
-
-			/* Inform user of socket number - useful in send 
-			 * and receive actions */
-			printf("New connection: \nsocket fd: \t%d\nip: \t%s\nport:\t%d\n",
-					new_socket, inet_ntoa(address.sin_addr), 
-					ntohs(address.sin_port));
-			/* Reply to the client */
-			message = "Hi! You are now connected and being assigned a handler\n";
-			write_bytes = write(new_socket, message, strlen(message));
-			if (write_bytes != strlen(message)) {
-				fprintf(stderr, "failed to write");
-				perror("send\n");
-			}
-			printf("Sent Welcome message\n");
-
-			/* add to array */
-			for (i = 0; i < MAX_CLIENTS; i++) {
-				if (!client_socket[i]) {
-					client_socket[i] = new_socket;
-					printf("Socket added to array at index %d\n", i);
-					break;
+		for (i = 0; i < port_count; i++) {
+			/* master socket, => incoming connection */
+			if (FD_ISSET(listener->ports[i], &readfds)) {
+				if ((new_socket = accept(listener->ports[i], 
+								(struct sockaddr *)&address,
+								(socklen_t *)&addrlen)) < 0) {
+					perror("accept\n");
+					exit(EXIT_FAILURE);
 				}
+
+				/* Inform user of socket number - useful in send 
+				* and receive actions */
+				printf("New connection: \nsocket fd: \t%d\nip: \t%s\nport:\t%d\n",
+						new_socket, inet_ntoa(address.sin_addr), 
+						ntohs(address.sin_port));
+				/* Reply to the client */
+				message = "Hi! You are now connected and being assigned a handler\n";
+				write_bytes = write(new_socket, message, strlen(message));
+				if (write_bytes != strlen(message)) {
+					fprintf(stderr, "failed to write");
+					perror("send\n");
+				}
+				printf("Sent Welcome message\n");
+
+				/* add to users */
+				add_connection(listener->users, new_socket);
 			}
 		}
 
 		/* IO on other sockets */
 
-		for (i = 0; i < MAX_CLIENTS; i++) {
-			sd = client_socket[i];
-
+		for (n = online_list2->head; n; n = n->next) {
+			sd = (int)((long)n->data);
+			if (sd <= 0) {
+				printf("this shouldn't be possible when translating a name to an sd.\n");
+				continue;
+			}
 			if (FD_ISSET(sd, &readfds)) {
-				/* was it for closing or receiving a message? */
-				if ((valread = read(sd, buffer, BUFFER_SIZE)) == 0) {
-					/* disconnection, display details */
-					getpeername(sd, (struct sockaddr *)&address, (socklen_t *)&addrlen);
-					printf("Host disconnected: \nip %s, port %d\n", 
-							inet_ntoa(address.sin_addr), ntohs(address.sin_port));
-
-					/* close the socket and mard as 0 */
+				/* boom */
+				packet = NULL;
+				packet = receive_packet(sd);
+				if (!packet) {
+					remove_channel(listener->users, sd);
+					push_user_list(listener->speaker);
 					close(sd);
-					client_socket[i] = 0;
+				} else if (packet->code == QUIT) {
+					remove_channel(listener->users, sd);
+					push_user_list(listener->speaker);
+					close(sd);
+				} else if (packet->code == SEND) {
+					add_packet_to_queue(listener->speaker, packet);
+				} else if (packet->code == ECHO) {
+					send_packet(packet, sd);
+				} else if (packet->code == BROADCAST) {
+					broadcast(listener->speaker, packet);
+				} else if (packet->code == LOGIN) {
+					if ((check_user_password(packet->name, packet->data)) && 
+							login_connection(listener->users, sd, packet->name)) {
+						push_user_list(listener->speaker);
+						p = new_packet(SEND, "admin", "accept", packet->name);
+						send_packet(p, sd);
+						p = NULL;
+					} else {
+						p = new_packet(SEND, "admin", "denial", packet->name);
+						send_packet(p, sd);
+						p = NULL;
+						close(sd);
+					}
+
+				} else if (packet->code == GET_ULIST) {
+					add_packet_to_queue(listener->speaker, packet);
 				} else {
-					/* I am the echo in the cave */
-					buffer[valread] = '\0';
-					send(sd, buffer, strlen(buffer), 0);
+					fprintf(stderr, "Packet with code %d came.  this is weird\n", 
+							packet->code);
 				}
 			}
 		}
 	}
-
-
-	/*
-		new_sockptr = malloc(sizeof(int));
-		*new_sockptr = new_socket;
-		
-		pthread_mutex_lock(thread_lock);
-		if (pthread_create(&threads[thread_count], NULL, connection_handler, 
-					(void *) new_sockptr) < 0) {
-			fprintf(stderr, "could not create a new thread\n");
-			return 3;
-		}
-		thread_count++;
-		pthread_mutex_unlock(thread_lock);
-
-		printf("handler assigned\n");
-	}
-
-	free(threads);	
-
-	if (new_socket < 0) {
-		fprintf(stderr, "accept failed\n");
-		return 4;
-	}
-
-
-	free_globals();
-	*/
-
-	return 0;
 }
 
-/*** Functions ***********************************************************/
-
-/*
-int init_globals() 
+int check_user_password(char *name, char *pw)
 {
-	if ((thread_lock = malloc(sizeof(pthread_mutex_t))) == NULL) {
-		fprintf(stderr, "failed to initialize lock\n");
-		return FALSE;
+	if (name == pw) {
+		return TRUE;
+	} else {
+		return TRUE;
 	}
-	if (0 != pthread_mutex_init(thread_lock, NULL)) {
-		return FALSE;
-	}
-
-	if ((running_lock = malloc(sizeof(pthread_mutex_t))) == NULL) {
-		fprintf(stderr, "failed to initialize lock\n");
-		return FALSE;
-	}
-	if (0 != pthread_mutex_init(running_lock, NULL)) {
-		return FALSE;
-	}
-
-	threads = malloc(sizeof(pthread_t) * MAX_CLIENTS);
-	if (!threads) {
-		return FALSE;
-	}
-	thread_count = 0;
-	return TRUE;
-}
-*/
-
-/*
-void free_globals()
-{
-	int i;
-
-	if (threads) {
-		for (i = 0; i < thread_count; i++) {
-			pthread_join(threads[i], NULL);
-		}
-		free(threads);
-		threads = NULL;
-	}
-
-	if (thread_lock) {
-		pthread_mutex_destroy(thread_lock);
-		free(thread_lock);
-		thread_lock = NULL;
-	}
-	if (running_lock) {
-		pthread_mutex_destroy(running_lock);
-		free(running_lock);
-		running_lock = NULL;
-	}
-
 }
 
-*/
-
-	/*
-void *connection_handler(void *socket_desc)
-{
-	int sock = *(int *)socket_desc;
-	int read_size = -1;
-	char *message, client_message[BUFFER_SIZE];
-	int write_bytes;
-	*/
-
-	/* Send message to the client */
-	/*
-
-	message = "Greetings! I am your Lord Connection Handler\n";
-	write_bytes = write(sock, message, strlen(message));
-	if (write_bytes == 0) {
-		fprintf(stderr, "failed to write");
-	}
-
-	message = "Type a message and I will say the same: \n";
-	write_bytes = write(sock, message, strlen(message));
-	if (write_bytes == 0) {
-		fprintf(stderr, "failed to write");
-	}
-
-	*/
-	/* Receive messages from the client */
-	/*
-	while ((read_size = recv(sock, client_message, BUFFER_SIZE, 0)) > 0) {
-		client_message[read_size] = '\0';
-		write_bytes = write(sock, client_message, strlen(client_message) + 1);
-		if (write_bytes == 0) {
-			fprintf(stderr, "failed to write");
-		}
-
-	}
-
-	if (read_size == 0) {
-		printf("Disconnected client\n");
-		fflush(stdout);
-	} else if (read_size == -1) {
-		fprintf(stderr, "Failed to receive\n");
-	}
-
-	free(socket_desc);
-
-	return NULL;
-}
-*/
-
-
-/*
-void *terminal_manager(void *some_pointer) 
-{
-	long number = (long) some_pointer;
-	if (number) {
-		printf("%ld, please provide commands as text\n", number);
-	}
-	return NULL;
-}
-*/

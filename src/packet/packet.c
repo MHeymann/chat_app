@@ -8,6 +8,10 @@
 #include "serializer.h"
 #include "../queue/queue.h"
 
+/*** Helper Function Prototypes ******************************************/
+
+int cmp_strings(void *a, void *b);
+char *strdup(char *s);
 
 /*** Functions ***********************************************************/
 
@@ -57,8 +61,9 @@ packet_t *new_packet(int code, char *name, char *data, char*to)
 	return packet;
 }
 
-void free_packet(packet_t *packet)
+void free_packet(void *p)
 {
+	packet_t *packet = (packet_t *)p;
 	if (!packet) {
 		fprintf(stderr, "Null pointer was given to free");
 		return;
@@ -89,22 +94,26 @@ void free_packet(packet_t *packet)
 void set_user_list(packet_t *p, queue_t *users) 
 {
 	node_t *n = NULL;
+	queue_t *cusers;
 	if (p->users) {
 		free_queue(p->users);
 		p->users = NULL;
 	}
-	p->users = users;
+
+	init_queue(&cusers, cmp_strings, free);
+
 	p->list_len = get_node_count(users);
 	p->list_size = 0;
 	for (n = users->head; n; n = n->next) {
 		p->list_size += sizeof(int);
 		if (n->data) {
 			p->list_size += strlen((char *)n->data);
+			insert_node(cusers, strdup((char *)n->data));
 		} else {
 			fprintf(stderr, "fault in queue nodes!!\n");
 		}
 	}
-	
+	p->users = cusers;
 }
 
 int get_code(packet_t *p) 
@@ -160,10 +169,16 @@ packet_t *receive_packet(int fd)
 	r = read(fd, (void *)b, sizeof(int));
 
 	if (r == 0) {
+#ifdef PDEBUG
+		printf("0 disconnect*************\n");
 		printf("Does this ever happen??*************\n");
+#endif
 		close(fd);
 		return NULL;
 	} else if (r == -1) {
+#ifdef PDEBUG
+		printf("-1 disconnect*************\n");
+#endif
 		close(fd);
 		return NULL;
 	}
@@ -173,7 +188,9 @@ packet_t *receive_packet(int fd)
 	size = ntohl(*intp);
 	
 	if (size <= 0) {
+#ifdef PDEBUG
 		printf("this is objectively weird. Inside receive_packet\n");
+#endif
 		return NULL;
 	}
 
@@ -201,3 +218,20 @@ packet_t *receive_packet(int fd)
 	
 }
 
+/*** Helper Functions ****************************************************/
+
+int cmp_strings(void *a, void *b)
+{
+	return strcmp((char *)a, (char *)b);
+}
+
+char *strdup(char *s)
+{
+	char *c = malloc(strlen(s) + 1);
+	int i = 0;
+	int j = 0;
+
+	while((c[i++] = s[j++]));
+
+	return c;
+}

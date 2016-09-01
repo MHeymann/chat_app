@@ -28,7 +28,7 @@ packet_t *new_empty_packet();
 
 packet_t *new_packet(int code, char *name, char *data, char*to);
 
-void free_packet(packet_t *packet);
+void free_packet(void *p);
 
 void set_user_list(packet_t *packet, queue_t *users);
 

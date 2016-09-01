@@ -17,7 +17,11 @@ typedef struct users {
 
 users_t *new_users();
 
-queue_t *get_names();
+void free_users(users_t *users);
+
+queue_t *get_names(users_t *users);
+
+queue_t *get_fds(users_t *users);
 
 void users_send_packet(users_t *users, packet_t *packet);
 
@@ -25,6 +29,8 @@ void remove_channel(users_t *users, int fd);
 
 void remove_name(users_t *users, char *name);
 
-int add_connection(users_t *users, char *name, int fd);
+int add_connection(users_t *users, int fd);
+
+int login_connection(users_t *users, int fd, char *name);
 
 #endif

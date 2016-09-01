@@ -7,24 +7,24 @@
 #include "packet.h"
 
 #ifdef DEBUG
-#include <string.h>
 #endif
 
-int read_int_from_buffer(char *bytes, int *global_index);
-char *read_string_from_buffer(char *bytes, int *global_index, int length);
+int read_int_from_buffer(char *buffer, int *global_index);
+char *read_string_from_buffer(char *buffer, int *global_index, int length);
 int cmp(void *a, void *b);
+
+void write_int_to_buffer(char *buffer, int *global_index, int integer);
+void write_string_to_buffer(char *buffer, int *global_index, int length, char *string);
 
 /*** Functions ***********************************************************/
 
 char *serialize(packet_t *packet, int *psize) 
 {
 	int global_index = 0;
-	int i = 0;
 	int len;
 	int *iptr = NULL;
 	int size = 0;
 	char *buffer = NULL;
-	char *string = NULL;
 	node_t *n = NULL;
 
 	size += sizeof(int);
@@ -67,18 +67,10 @@ char *serialize(packet_t *packet, int *psize)
 	}
 #endif
 	if (packet->name) {
-		iptr = (int *)(buffer + global_index);
-		*iptr = htonl(packet->name_len);
-		global_index += sizeof(int);
-		string = packet->name;
-		for (i = 0; i < packet->name_len; i++) {
-			buffer[global_index + i] = string[i];
-		}
-		global_index += i;
+		write_int_to_buffer(buffer, &global_index, packet->name_len);
+		write_string_to_buffer(buffer, &global_index, packet->name_len, packet->name);
 	} else {
-		iptr = (int *)(buffer + global_index);
-		*iptr = htonl(0);
-		global_index += sizeof(int);
+		write_int_to_buffer(buffer, &global_index, 0);
 	}
 
 #ifdef DEBUG
@@ -88,18 +80,10 @@ char *serialize(packet_t *packet, int *psize)
 	}
 #endif
 	if (packet->data) {
-		iptr = (int *)(buffer + global_index);
-		*iptr = htonl(packet->data_len);
-		global_index += sizeof(int);
-		string = packet->data;
-		for (i = 0; i < packet->data_len; i++) {
-			buffer[global_index + i] = string[i];
-		}
-		global_index += i;
+		write_int_to_buffer(buffer, &global_index, packet->data_len);
+		write_string_to_buffer(buffer, &global_index, packet->data_len, packet->data);
 	} else {
-		iptr = (int *)(buffer + global_index);
-		*iptr = htonl(0);
-		global_index += sizeof(int);
+		write_int_to_buffer(buffer, &global_index, 0);
 	}
 
 #ifdef DEBUG
@@ -109,18 +93,10 @@ char *serialize(packet_t *packet, int *psize)
 	}
 #endif
 	if (packet->to) {
-		iptr = (int *)(buffer + global_index);
-		*iptr = htonl(packet->to_len);
-		global_index += sizeof(int);
-		string = packet->to;
-		for (i = 0; i < packet->to_len; i++) {
-			buffer[global_index + i] = string[i];
-		}
-		global_index += i;
+		write_int_to_buffer(buffer, &global_index, packet->to_len);
+		write_string_to_buffer(buffer, &global_index, packet->to_len, packet->to);
 	} else {
-		iptr = (int *)(buffer + global_index);
-		*iptr = htonl(0);
-		global_index += sizeof(int);
+		write_int_to_buffer(buffer, &global_index, 0);
 	}
 
 #ifdef DEBUG
@@ -130,24 +106,14 @@ char *serialize(packet_t *packet, int *psize)
 	}
 #endif
 	if (packet->users) {
-		iptr = (int *)(buffer + global_index);
-		*iptr = htonl(packet->list_len);
-		global_index += sizeof(int);
+		write_int_to_buffer(buffer, &global_index, packet->list_len);
 		for (n = packet->users->head; n; n = n->next) {
-			iptr = (int *)(buffer + global_index);
 			len = (int)strlen((char *)n->data);
-			*iptr = htonl(len);
-			global_index += sizeof(int);
-			string = n->data;
-			for (i = 0; i < len; i++) {
-				buffer[global_index + i] = string[i];
-			}
-			global_index += i;
+			write_int_to_buffer(buffer, &global_index, len);
+			write_string_to_buffer(buffer, &global_index, len, (char *)n->data);
 		}
 	} else {
-		iptr = (int *)(buffer + global_index);
-		*iptr = htonl(0);
-		global_index += sizeof(int);
+		write_int_to_buffer(buffer, &global_index, 0);
 	}
 
 	return buffer;
@@ -233,7 +199,7 @@ char *read_string_from_buffer(char *bytes, int *global_index, int length)
 	string = malloc(length + 1);
 
 	for (i = 0; i < length; i++) {
-		string[i] = bytes[*global_index + i];
+		string[i] = bytes[*global_index + (2 * i)];
 	}
 
 	string[length] = '\0';
@@ -248,4 +214,22 @@ int cmp(void *a, void *b)
 	} else {
 		return 0;
 	}
+}
+
+void write_int_to_buffer(char *buffer, int *global_index, int integer)
+{
+	int *iptr = NULL;
+	iptr = (int *)(buffer + *global_index);
+	*iptr = htonl(integer);
+	*global_index += sizeof(int);
+}
+
+
+void write_string_to_buffer(char *buffer, int *global_index, int length, char *string)
+{
+	int i;
+	for (i = 0; i < length; i++) {
+		buffer[*global_index + (2 * i)] = string[i];
+	}
+	*global_index += i;
 }
