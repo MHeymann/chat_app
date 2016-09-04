@@ -23,17 +23,17 @@ packet_t *new_empty_packet()
 	packet->code = -1;
 
 	packet->name = NULL; 
-	packet->name_len = -1;
+	packet->name_len = 0;
 
 	packet->data = NULL;
-	packet->data_len = -1;
+	packet->data_len = 0;
 
 	packet->to = NULL;
-	packet->to_len =  -1;
+	packet->to_len =  0;
 
 	packet->users = NULL;
-	packet->list_len = -1;
-	packet->list_size = -1;
+	packet->list_len = 0;
+	packet->list_size = 0;
 
 	return packet;
 }
@@ -45,18 +45,33 @@ packet_t *new_packet(int code, char *name, char *data, char*to)
 
 	packet->code = code;
 
-	packet->name = name; 
-	packet->name_len = strlen(name);
+	if (name) {
+		packet->name = name; 
+		packet->name_len = strlen(name);
+	} else {
+		packet->name = NULL;
+		packet->name_len = 0;
+	}
 
-	packet->data = data;
-	packet->data_len = strlen(data);
+	if (data) {
+		packet->data = data;
+		packet->data_len = strlen(data);
+	} else {
+		packet->data = NULL;
+		packet->data_len = 0;
+	}
 
-	packet->to = to;
-	packet->to_len =  strlen(to);
+	if (to) {
+		packet->to = to;
+		packet->to_len =  strlen(to);
+	} else {
+		packet->to = NULL;
+		packet->to_len =  0;
+	}
 
 	packet->users = NULL;
-	packet->list_len = -1;
-	packet->list_size = -1;
+	packet->list_len = 0;
+	packet->list_size = 0;
 
 	return packet;
 }
@@ -89,12 +104,13 @@ void free_packet(void *p)
 		packet->list_len = -1;
 		packet->list_size = -1;
 	}
+	free(p);
 }
 
 void set_user_list(packet_t *p, queue_t *users) 
 {
 	node_t *n = NULL;
-	queue_t *cusers;
+	queue_t *cusers = NULL;
 	if (p->users) {
 		free_queue(p->users);
 		p->users = NULL;
@@ -107,7 +123,7 @@ void set_user_list(packet_t *p, queue_t *users)
 	for (n = users->head; n; n = n->next) {
 		p->list_size += sizeof(int);
 		if (n->data) {
-			p->list_size += strlen((char *)n->data);
+			p->list_size += strlen((char *)n->data) * 2;
 			insert_node(cusers, strdup((char *)n->data));
 		} else {
 			fprintf(stderr, "fault in queue nodes!!\n");
@@ -146,13 +162,19 @@ void send_packet(packet_t *packet, int fd)
 	int write_bytes;
 	int i;
 	char *buffer = NULL;
+	char sbuffer[4];
+	int *iptr = (int *)sbuffer;
 
 	buffer = serialize(packet, &size);
+	
+	*iptr = htonl(size);
 
+	write_bytes = write(fd, sbuffer, 4);
 	for (i = 0; i < size;) {
 		write_bytes = write(fd, (buffer + i), size - i);
 		i += write_bytes;
 	}
+	free(buffer);
 }
 
 packet_t *receive_packet(int fd) 
@@ -200,7 +222,6 @@ packet_t *receive_packet(int fd)
 		fprintf(stderr, "Failed to malloc a buffer in receive_packet\n");
 		return NULL;
 	}
-
 	for (i = 0; i < size; i++) {
 		r = read(fd, (b + i), size - i);
 		i += r;
@@ -213,6 +234,7 @@ packet_t *receive_packet(int fd)
 	}
 
 	packet = deserialize(b);
+	free(b);
 
 	return packet;
 	

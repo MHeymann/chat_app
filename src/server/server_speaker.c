@@ -53,7 +53,37 @@ server_speaker_t *new_server_speaker(users_t *users)
 	init_queue(&q, cmp_dummy, free_packet);
 	speaker->q = q;
 
+	speaker->run_status = TRUE;
+	speaker->status_lock = malloc(sizeof(pthread_mutex_t));
+	pthread_mutex_init(speaker->status_lock, NULL);
+
 	return speaker;
+}
+
+void server_speaker_free(server_speaker_t *speaker)
+{
+
+	speaker->users = NULL;
+	if (speaker->queue_sem) {
+		sem_destroy(speaker->queue_sem);
+		free(speaker->queue_sem);
+		speaker->queue_sem = NULL;
+	}
+	if (speaker->queue_lock) {
+		pthread_mutex_destroy(speaker->queue_lock);
+		free(speaker->queue_lock);
+		speaker->queue_lock = NULL;
+	}
+	if (speaker->q) {
+		free_queue(speaker->q);
+		speaker->q = NULL;
+	}
+	if (speaker->status_lock) {
+		pthread_mutex_destroy(speaker->status_lock);
+		free(speaker->status_lock);
+		speaker->status_lock = NULL;
+	}
+	free(speaker);
 }
 
 void add_packet_to_queue(server_speaker_t *speaker, packet_t *packet)
@@ -69,13 +99,16 @@ void add_packet_to_queue(server_speaker_t *speaker, packet_t *packet)
 void push_user_list(server_speaker_t *speaker)
 {
 	packet_t *packet = NULL;
-	queue_t *names = get_names(speaker->users);
+	queue_t *names = NULL;
 	node_t *n = NULL;
+
+	names = get_names(speaker->users);
 
 	for (n = names->head; n; n = n->next) {
 		packet = NULL;
 		packet = new_packet(GET_ULIST, speak_strdup((char *)n->data), NULL, speak_strdup((char *)n->data));
 		set_user_list(packet, names);
+
 		add_packet_to_queue(speaker, packet);
 	}
 
@@ -109,6 +142,24 @@ void *speaker_run(void *s)
 	return NULL;
 }
 
+void speaker_stop(server_speaker_t *speaker)
+{
+	pthread_mutex_lock(speaker->status_lock);
+	speaker->run_status = FALSE;
+	pthread_mutex_unlock(speaker->status_lock);
+	sem_post(speaker->queue_sem);
+}
+
+int speaker_running(server_speaker_t *speaker)
+{
+	int status;
+	pthread_mutex_lock(speaker->status_lock);
+	status = speaker->run_status;
+	pthread_mutex_unlock(speaker->status_lock);
+	return status;
+}
+
+
 /*** Helper Functions ****************************************************/
 
 int cmp_dummy(void *a, void *b)
@@ -134,6 +185,9 @@ void speaker_go(server_speaker_t *speaker)
 	queue_t *online_users = NULL;
 	while(TRUE) {
 		sem_wait(speaker->queue_sem);
+		if (!speaker_running(speaker)) {
+			break;
+		}
 		packet = NULL;
 
 		pthread_mutex_lock(speaker->queue_lock);

@@ -149,9 +149,13 @@ void free_queue(queue_t *q)
  */
 int get_node_count(queue_t *q)
 {
+	int r = 0;
 	DBG_enter("get_node_count");
+	if (q) {
+		r = q->node_count;
+	}
 	DBG_leave("get_node_count");
-	return q->node_count;
+	return r;
 }
 
 /**

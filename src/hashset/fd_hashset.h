@@ -60,6 +60,8 @@ void fd_hashset_init(fd_hashset_ptr *hs, int init_delta, int delta_diff);
  */
 int fd_hashset_insert(fd_hashset_ptr hs, int fdkey, char *svalue);
 
+void fd_hashset_update(fd_hashset_ptr hs, int fdkey, char *svalue);
+
 void fd_hashset_remove(fd_hashset_ptr hs, int key);
 
 char *fd_get_name(fd_hashset_ptr shs, int fd);

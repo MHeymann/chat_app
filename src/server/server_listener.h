@@ -10,13 +10,14 @@
 
 typedef struct listener {
 	int *ports;
+	int port_count;
 	int run_status;
 	pthread_mutex_t *status_lock;
 	users_t *users;
 	server_speaker_t *speaker;
 } server_listener_t;
 
-server_listener_t *new_server_listener(int *ports, users_t *users, 
+server_listener_t *new_server_listener(int *ports, int port_count, users_t *users, 
 		server_speaker_t *speaker);
 
 void server_listener_free(server_listener_t *listener);

@@ -26,7 +26,7 @@ typedef struct fd_hashset {
 
 /*** Helper Function Prototypes ******************************************/
 
-unsigned long hash_string(void *key, unsigned int size);
+unsigned long hash_fd(void *key, unsigned int size);
 int cmp_fd_strings(void *a, void *b);
 void fd_val2str(void *key, void *val, char *buffer);
 void fd_dud_free(void *);
@@ -69,7 +69,7 @@ void fd_hashset_init(fd_hashset_ptr *hs, int init_delta, int delta_diff)
 		return;
 	}
 
-	ht = ht_init(0.75f, init_delta, delta_diff, hash_string, cmp_fd_strings);
+	ht = ht_init(0.75f, init_delta, delta_diff, hash_fd, cmp_fds);
 	if (!ht) {
 		fprintf(stderr, "Error initializing hashtable.\n");
 		free(hset);
@@ -80,6 +80,18 @@ void fd_hashset_init(fd_hashset_ptr *hs, int init_delta, int delta_diff)
 	hset->ht = ht;
 
 	*hs = hset;
+}
+
+void fd_hashset_update(fd_hashset_ptr hs, int fdkey, char *svalue)
+{
+	long fdl;
+	char *scopy = fd_strdup(svalue);
+	if (!scopy) {
+		fprintf(stderr, "failed to copy string\n");
+	}
+
+	fdl = fdkey;
+	ht_update(hs->ht, (void *)fdl, (void *)scopy, free);
 }
 
 /**
@@ -102,7 +114,9 @@ int fd_hashset_insert(fd_hashset_ptr hs, int fdkey, char *svalue)
 	}
 
 	fdl = fdkey;
-	insert_status = ht_insert(hs->ht, (void *)fdl, (void *)svalue);
+	printf("about to insert fd into table\n");
+	insert_status = ht_insert(hs->ht, (void *)fdl, (void *)scopy);
+	printf("inserted fd into table\n");
 	if (insert_status) {
 		switch (insert_status) {
 			case 1:
@@ -184,7 +198,7 @@ void free_fd_hashset(fd_hashset_ptr hs)
 
 queue_t *fdhs_get_keys(fd_hashset_ptr fd_hs)
 {
-	return get_keys(fd_hs->ht, copy_fd_key, cmp_fds, free);
+	return get_keys(fd_hs->ht, copy_fd_key, cmp_fds, fd_dud_free);
 }
 
 /*** Helper Functions ****************************************************/
@@ -197,7 +211,12 @@ void *copy_fd_key(void *a)
 
 int cmp_fds(void *a, void *b) 
 {
-	return ((long)a - (long)b);
+	long A, B;
+	int ret;
+	A = (long)a;
+	B = (long)b;
+	ret = (int)(A - B);
+	return ret;
 }
 
 /**

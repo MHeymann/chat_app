@@ -20,7 +20,7 @@ EXES = server
 ### FLAGS #################################################################
 
 CFLAGS = -Wall -Wextra -ansi -pedantic -g -O
-DBGFLAGS = -DDEBUG #-DPDEBUG
+DBGFLAGS = #-DDEBUG #-DDEBUGHS #-DPDEBUG
 LFLAGS = -pthread
 
 ### COMMANDS ##############################################################

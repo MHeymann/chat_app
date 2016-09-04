@@ -45,6 +45,8 @@ hashtable_p ht_init(float factor, int init_delta, int delta_diff,
 		unsigned long (*hash)(void *key, unsigned int size), 
 		int (*cmp)(void *a, void *b));
 
+void ht_update(hashtable_p ht, void *key, void *value, void (*val_free)(void *));
+
 /**
  * Attempt to insert a key value pair.
  *

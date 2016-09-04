@@ -24,7 +24,7 @@ int main (void)
 
 	users = new_users();
 	speaker = new_server_speaker(users);
-	listener = new_server_listener(ports, users, speaker);
+	listener = new_server_listener(ports, 1, users, speaker);
 
 	pthread_create(&listen_thread, NULL, listener_run, (void *)listener);
 	pthread_create(&speak_thread, NULL, speaker_run, (void *)speaker);
@@ -37,13 +37,28 @@ int main (void)
 		}
 		if (strcmp(line, "quit") == 0) {
 			break;
-		} else if(strcmp(line, "quit") == 0) {
+		} else if(strcmp(line, "status") == 0) {
 			printf("Server running\n");
 		}
 	}
 
 	listener_stop(listener);
-	pthread_join(listen_thread, NULL);
+	speaker_stop(speaker);
+	printf("Joining speaker\n");
 	pthread_join(speak_thread, NULL);
+	printf("Joined listener\n");
+	printf("Joining listener\n");
+	pthread_join(listen_thread, NULL);
+	printf("Joined listener\n");
+
+	free_users(users);
+	users = NULL;
+	server_listener_free(listener);
+	listener = NULL;
+	server_speaker_free(speaker);
+	speaker = NULL;
+
+	free(ports);
+
 	return 0;
 }

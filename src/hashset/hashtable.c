@@ -112,6 +112,28 @@ hashtable_p ht_init(float factor, int init_delta, int delta_diff,
 	return ht;
 }
 
+void ht_update(hashtable_p ht, void *key, void *value, void (*val_free)(void *)) 
+{
+	unsigned int hash = -1;
+	ht_entry_p entry = NULL;
+
+	hash = ht->hash(key, ht->size);
+
+	for (entry = ht->table[hash]; entry; entry = entry->next_ptr) {
+		if (ht->cmp(entry->key, key) == 0) {
+			break;
+		}
+	}
+	if (!entry) {
+		return;
+	}
+	
+	if (entry->val) {
+		val_free(entry->val);
+	}
+	entry->val = value;
+}
+
 /**
  * Attempt to insert a key value pair.
  *
@@ -174,6 +196,7 @@ void ht_remove(hashtable_p ht, void *key, void (*freekey)(void *), void (*freeva
 	hash = ht->hash(key, ht->size);
 
 	if (ht->table[hash] == NULL) {
+		printf("Not found for removal\n");
 		return;
 	} else if (ht->cmp((ht->table[hash])->key, key) == 0) {
 		temp = ht->table[hash];
@@ -184,10 +207,12 @@ void ht_remove(hashtable_p ht, void *key, void (*freekey)(void *), void (*freeva
 		freeval(temp->val);
 		temp->val = NULL;
 		free(temp);
+		ht->num_entries--;
 		return;
 	}
 	for (entry = ht->table[hash]; entry->next_ptr; entry = entry->next_ptr) {
 		if (ht->cmp(entry->next_ptr->key, key) == 0) {
+			ht->num_entries--;
 			break;
 		}
 	}
@@ -274,11 +299,12 @@ int ht_item_count(hashtable_p ht)
  */ 
 int ht_lookup(hashtable_p ht, void *key, void **value)
 {
+	int compare;
 	ht_entry_p entry = NULL;
 	unsigned int hash = ht->hash(key, ht->size);
-
 	for (entry = ht->table[hash]; entry; entry = entry->next_ptr) {
-		if (ht->cmp(entry->key, key) == 0) {
+		compare = ht->cmp(entry->key, key);
+		if (compare == 0) {
 			/* found it! */
 			*value = entry->val;
 			return SUCCESS;

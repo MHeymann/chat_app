@@ -22,32 +22,46 @@ char *serialize(packet_t *packet, int *psize)
 {
 	int global_index = 0;
 	int len;
-	int *iptr = NULL;
 	int size = 0;
 	char *buffer = NULL;
 	node_t *n = NULL;
 
 	size += sizeof(int);
 #ifdef DEBUG
-	size += strlen(packet->name);
-	size += strlen(packet->data);
-	size += strlen(packet->to);
-	size += get_node_count(packet->users);
+	size += sizeof(int);
+	if (packet->name) {
+		size += strlen(packet->name) * 2;
+	}
+	size += sizeof(int);
+	if (packet->data) {
+		size += strlen(packet->data) * 2;
+	}
+	size += sizeof(int);
+	if (packet->to) {
+		size += strlen(packet->to) * 2;
+	}
+	/*
+	size += get_node_count(packet->users) * sizeof(int);
+	*/
+	size += sizeof(int);
 	if (get_node_count(packet->users)) {
 		for (n = packet->users->head; n; n = n->next) {
 			size += sizeof(int);
 			if (n->data) {
-				size += sizeof((char *)n->data);
+				size += strlen((char *)n->data) * 2;
 			} else {
 				fprintf(stderr, "fault in queue nodes!!\n");
 			}
 		}
 	}
 #else
-	size += packet->name_len;
-	size += packet->data_len;
-	size += packet->to_len;
-	size += packet->list_len;
+	size += sizeof(int);
+	size += packet->name_len * 2;
+	size += sizeof(int);
+	size += packet->data_len * 2;
+	size += sizeof(int);
+	size += packet->to_len * 2;
+	size += sizeof(int);
 	size += packet->list_size;
 #endif
 
@@ -55,9 +69,12 @@ char *serialize(packet_t *packet, int *psize)
 	*psize = size/* + sizeof(int)*/;
 
 	buffer = malloc(size + sizeof(int));
+	write_int_to_buffer(buffer, &global_index, packet->code);
+	/*
 	iptr = (int *)(buffer + global_index);
 	*iptr = htonl(size);
 	global_index += sizeof(int);
+	*/
 	
 
 #ifdef DEBUG
@@ -142,13 +159,19 @@ packet_t *deserialize(char *bytes)
 	code = read_int_from_buffer(bytes, &global_index);
 
 	name_len = read_int_from_buffer(bytes, &global_index);
-	name = read_string_from_buffer(bytes, &global_index, name_len);
+	if (name_len) {
+		name = read_string_from_buffer(bytes, &global_index, name_len);
+	}
 
 	data_len = read_int_from_buffer(bytes, &global_index);
-	data = read_string_from_buffer(bytes, &global_index, data_len);
+	if (data_len) {
+		data = read_string_from_buffer(bytes, &global_index, data_len);
+	}
 
 	to_len = read_int_from_buffer(bytes, &global_index);
-	to = read_string_from_buffer(bytes, &global_index, to_len);
+	if (to_len) {
+		to = read_string_from_buffer(bytes, &global_index, to_len);
+	}
 
 	list_len = read_int_from_buffer(bytes, &global_index);
 	if (list_len) {
@@ -195,15 +218,17 @@ char *read_string_from_buffer(char *bytes, int *global_index, int length)
 {
 	int i = 0;
 	char *string = NULL;
+	short *temp = 0;;
 
 	string = malloc(length + 1);
 
 	for (i = 0; i < length; i++) {
-		string[i] = bytes[*global_index + (2 * i)];
+		temp = (short *)&bytes[*global_index + (2 * i)];
+		string[i] = (char) ntohs(*temp);
 	}
 
 	string[length] = '\0';
-	*global_index += length;
+	*global_index += length * 2;
 	return string;
 }
 
@@ -228,8 +253,13 @@ void write_int_to_buffer(char *buffer, int *global_index, int integer)
 void write_string_to_buffer(char *buffer, int *global_index, int length, char *string)
 {
 	int i;
+	short *ch;
 	for (i = 0; i < length; i++) {
-		buffer[*global_index + (2 * i)] = string[i];
+		ch = (short *)(buffer + *global_index + (2 * i));
+		*ch = htons((short)string[i]);
+		/*
+		buffer[*global_index + (2 * i)] = ch;
+		*/
 	}
-	*global_index += i;
+	*global_index += i * 2;
 }

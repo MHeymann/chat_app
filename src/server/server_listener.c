@@ -22,20 +22,24 @@
 #define FALSE			0
 #define MAX_CLIENTS		(int) sizeof(long)
 
-#define PORT_COUNT(A)	(sizeof(A) / sizeof(int))
 	
 
 /*** Helper Function Prototypes ******************************************/
 
 void listener_go(server_listener_t *listener);
 int check_user_password(char *name, char *pw);
+char *listen_strdup(char *s);
 
 /*** Functions ***********************************************************/
 
-server_listener_t *new_server_listener(int *ports, users_t *users, 
+server_listener_t *new_server_listener(int *ports, int port_count, users_t *users, 
 		server_speaker_t *speaker)
 {
+	int i = 0;
 	server_listener_t *listener = NULL;
+	int lports[1];
+
+	lports[0] = 8002;
 
 	if (!users) {
 		fprintf(stderr, "Error: no users_t * provided\n");
@@ -47,9 +51,9 @@ server_listener_t *new_server_listener(int *ports, users_t *users,
 	}
 
 	if (!ports) {
-		ports = malloc(sizeof(int));
-		ports[0] = 8002;
+		ports = (int *)lports;
 		printf("Listener defaulting to port 8002\n");
+		port_count = 1;
 	}
 
 	listener = malloc(sizeof(server_listener_t));
@@ -57,7 +61,11 @@ server_listener_t *new_server_listener(int *ports, users_t *users,
 		fprintf(stderr, "error mallocing listener\n");
 		return NULL;
 	}
-	listener->ports = ports;
+	listener->ports = malloc(sizeof(int) * port_count);
+	for (i = 0; i < port_count; i++) {
+		listener->ports[i] = ports[i];
+	}
+	listener->port_count = port_count;
 	listener->run_status = TRUE;
 	listener->status_lock = malloc(sizeof(pthread_mutex_t));
 	pthread_mutex_init(listener->status_lock, NULL);
@@ -69,6 +77,9 @@ server_listener_t *new_server_listener(int *ports, users_t *users,
 
 void server_listener_free(server_listener_t *listener)
 {
+	if (!listener) {
+		return;
+	}
 	if (listener->ports) {
 		free(listener->ports);
 		listener->ports = NULL;
@@ -79,13 +90,18 @@ void server_listener_free(server_listener_t *listener)
 		listener->status_lock = NULL;
 	}
 	if (listener->users) {
+		/* this gets free'd in main */
+		/*
 		free_users(listener->users);
+		*/
 		listener->users = NULL;
 	}
 	if (listener->speaker) {
 		/* this gets free'd in main */
 		listener->speaker = NULL;
 	}
+
+	free(listener);
 }
 
 void *listener_run(void *listener) 
@@ -124,17 +140,17 @@ void listener_go(server_listener_t *listener)
 	int activity;
 	int max_sd;
 	struct sockaddr_in address;
-	char *message = NULL;
-	unsigned int write_bytes;
 	fd_set readfds;
 	int port_count;
 	queue_t *online_list2 = NULL;
 	node_t *n = NULL;
+	struct timeval tv;
 
 	packet_t *packet = NULL;
 	packet_t *p = NULL;
 
-	port_count = PORT_COUNT(listener->ports);
+	port_count = listener->port_count;
+
 
 
 	for (i = 0; i < port_count; i++) {
@@ -177,7 +193,7 @@ void listener_go(server_listener_t *listener)
 	/* Accept incoming connections */
 	printf("Waiting for incoming connections...\n");
 	addrlen = sizeof(address);
-	while (TRUE) {
+	while (listener_running(listener)) {
 		/* clear the socket set */
 		FD_ZERO(&readfds);
 
@@ -190,33 +206,7 @@ void listener_go(server_listener_t *listener)
 			}
 		}
 
-		/* get a list of those currently online */
-		/*
-		online_list1 = get_names(listener->users);
-		if (!online_list1) {
-			fprintf(stderr, "failed to get names\n");
-			exit(EXIT_FAILURE);
-		}
-		*/
-
-
 		/* all sockets currently opened added to set */
-		/*
-		for (n = online_list1->head; n; n = n->next) {
-			name_ptr = (char *)n->data;
-			sd = name_get_fd(listener->users->names, name_ptr);
-			if (sd <= 0) {
-				printf("this shouldn't be possible when translating a name to an sd.\n");
-				continue;
-			}
-			FD_SET(sd, &readfds);
-
-			if (max_sd < sd) {
-				max_sd = sd;
-			}
-		}
-		*/
-
 		online_list2 = get_fds(listener->users);
 		for (n = online_list2->head; n; n = n->next) {
 			sd = (int)((long)n->data);
@@ -230,14 +220,23 @@ void listener_go(server_listener_t *listener)
 				max_sd = sd;
 			}
 		}
+		free_queue(online_list2);
+		online_list2 = NULL;
 
 		/* ret	 = select(nfds, readfds, writefds, exceptfds, timeout); */
-		activity = select(max_sd + 1, &readfds, NULL, NULL, NULL);
+		tv.tv_sec = 1;
+		tv.tv_usec = 0;
+		activity = select(max_sd + 1, &readfds, NULL, NULL, &tv);
 
 		if ((activity < 0) && (errno != EINTR)) {
 			printf("select error\n");
 		}
+		if (activity == 0) {
+			continue;
+		}
 
+		online_list2 = get_fds(listener->users);
+		
 		for (i = 0; i < port_count; i++) {
 			/* master socket, => incoming connection */
 			if (FD_ISSET(listener->ports[i], &readfds)) {
@@ -253,14 +252,6 @@ void listener_go(server_listener_t *listener)
 				printf("New connection: \nsocket fd: \t%d\nip: \t%s\nport:\t%d\n",
 						new_socket, inet_ntoa(address.sin_addr), 
 						ntohs(address.sin_port));
-				/* Reply to the client */
-				message = "Hi! You are now connected and being assigned a handler\n";
-				write_bytes = write(new_socket, message, strlen(message));
-				if (write_bytes != strlen(message)) {
-					fprintf(stderr, "failed to write");
-					perror("send\n");
-				}
-				printf("Sent Welcome message\n");
 
 				/* add to users */
 				add_connection(listener->users, new_socket);
@@ -268,8 +259,8 @@ void listener_go(server_listener_t *listener)
 		}
 
 		/* IO on other sockets */
-
 		for (n = online_list2->head; n; n = n->next) {
+			printf("iterating online list %ld\n", (long)n->data);
 			sd = (int)((long)n->data);
 			if (sd <= 0) {
 				printf("this shouldn't be possible when translating a name to an sd.\n");
@@ -282,13 +273,16 @@ void listener_go(server_listener_t *listener)
 				if (!packet) {
 					remove_channel(listener->users, sd);
 					push_user_list(listener->speaker);
+					/*
 					close(sd);
+					*/
 				} else if (packet->code == QUIT) {
 					remove_channel(listener->users, sd);
 					push_user_list(listener->speaker);
 					close(sd);
 				} else if (packet->code == SEND) {
 					add_packet_to_queue(listener->speaker, packet);
+					packet = NULL;
 				} else if (packet->code == ECHO) {
 					send_packet(packet, sd);
 				} else if (packet->code == BROADCAST) {
@@ -297,24 +291,35 @@ void listener_go(server_listener_t *listener)
 					if ((check_user_password(packet->name, packet->data)) && 
 							login_connection(listener->users, sd, packet->name)) {
 						push_user_list(listener->speaker);
-						p = new_packet(SEND, "admin", "accept", packet->name);
+						p = new_packet(SEND, listen_strdup("admin"), listen_strdup("accept"), listen_strdup(packet->name));
 						send_packet(p, sd);
+						free_packet(p);
 						p = NULL;
 					} else {
-						p = new_packet(SEND, "admin", "denial", packet->name);
+						p = new_packet(SEND, listen_strdup("admin"), listen_strdup("denial"), listen_strdup(packet->name));
 						send_packet(p, sd);
+						free_packet(p);
 						p = NULL;
 						close(sd);
+						printf("closed\n");
+						fd_hashset_remove(listener->users->sockets, sd);
+						printf("removed\n");
 					}
 
 				} else if (packet->code == GET_ULIST) {
 					add_packet_to_queue(listener->speaker, packet);
+					packet = NULL;
 				} else {
 					fprintf(stderr, "Packet with code %d came.  this is weird\n", 
 							packet->code);
 				}
+				if (packet) {
+					free_packet(packet);
+				}
 			}
 		}
+		free_queue(online_list2);
+		online_list2 = NULL;
 	}
 }
 
@@ -327,3 +332,14 @@ int check_user_password(char *name, char *pw)
 	}
 }
 
+
+char *listen_strdup(char *s)
+{
+	char *c = malloc(strlen(s) + 1);
+	int i = 0;
+	int j = 0;
+
+	while((c[i++] = s[j++]));
+
+	return c;
+}
