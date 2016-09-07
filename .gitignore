@@ -39,3 +39,6 @@
 *.h~
 *.py~
 *.swp
+
+server
+client

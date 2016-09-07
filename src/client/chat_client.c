@@ -23,6 +23,9 @@ typedef struct client {
 
 char *client_strdup(char *s);
 void broken_connection(chat_client_t *client);
+void read_line(FILE *f, char *line);
+
+char ch = '\0';
 
 /*** Main Function *******************************************************/
 
@@ -139,18 +142,31 @@ GIVE_UNAME:
 	printf("Please type 'help<enter>' for available options\n");
 	while(TRUE) {
 		printf(">> ");
+		read_line(stdin, line);
+		ret = 1;
+		/*
 		ret = scanf("%s", line);
+		*/
 		if (ret != 1) {
 			printf("some problem scanning for input\n");
 		} else if (strcmp(line, "help") == 0) {
+			printf("The following commands are supported:\n");
+			printf("\t\x1b[1;34msend\x1b[0m: \t\tSend a message\n");
+			printf("\t\x1b[1;34mbroadcast\x1b[0m: \tBroadcast a message to all users\n");
+			printf("\t\x1b[1;34mecho\x1b[0m: \t\tEcho a message to yourself\n");
+			printf("\t\x1b[1;34mexit\x1b[0m: \t\tShut down this chat client\n");
+			printf("\t\x1b[1;34mquit\x1b[0m: \t\tSee exit\n");
 		} else if (strcmp(line, "send") == 0) {
 			printf("Type the user name of your recipient: \n");
 			printf(">> ");
+			read_line(stdin, line);
+			/*
 			ret = scanf("%s", line);
 			if (!ret) {
 				printf("some error entering recipient name\n");
 				continue;
 			}
+			*/
 			to = client_strdup(line);
 			if (!to) {
 				printf("some error copying recipient name\n");
@@ -158,6 +174,8 @@ GIVE_UNAME:
 			}
 			printf("Type the message to be sent: \n");
 			printf(">> ");
+			read_line(stdin, line);
+			/*
 			ret = scanf("%s", line);
 			if (!ret) {
 				printf("some error entering message\n");
@@ -165,6 +183,7 @@ GIVE_UNAME:
 				to = NULL;
 				continue;
 			}
+			*/
 			message = client_strdup(line);
 			if (!message) {
 				printf("some error copying message\n");
@@ -184,11 +203,14 @@ GIVE_UNAME:
 		} else if (strcmp(line, "broadcast") == 0) {
 			printf("Type the message to be broadcast: \n");
 			printf(">> ");
+			read_line(stdin, line);
+			/*
 			ret = scanf("%s", line);
 			if (!ret) {
 				printf("some error entering message\n");
 				continue;
 			}
+			*/
 			message = client_strdup(line);
 			if (!message) {
 				printf("some error copying message\n");
@@ -205,11 +227,14 @@ GIVE_UNAME:
 		} else if (strcmp(line, "echo") == 0) {
 			printf("Type the message to be echoed: \n");
 			printf(">> ");
+			read_line(stdin, line);
+			/*
 			ret = scanf("%s", line);
 			if (!ret) {
 				printf("some error entering message\n");
 				continue;
 			}
+			*/
 			message = client_strdup(line);
 			if (!message) {
 				printf("some error copying message\n");
@@ -226,11 +251,12 @@ GIVE_UNAME:
 		} else if (strcmp(line, "listusers") == 0) {
 			get_online_names(client->speaker);
 		} else if (strcmp(line, "logout") == 0) {
-			speaker_logoff(client->speaker);
 			printf("Stopping listener\n");
 			stop_listener(client->listener);
 			printf("Joining listen thread\n");
 			pthread_join(*(client->listen_thread), NULL);
+			printf("Notifying server\n");
+			speaker_logoff(client->speaker);
 			free_chat_client(client);
 			client = new_client();
 			goto ESTABLISH_CONNECTION;
@@ -344,10 +370,11 @@ void client_append(chat_client_t *client, char *s)
 void client_show_online_users(chat_client_t *client, queue_t *users_q)
 {
 	node_t *node = NULL;
-	printf("Online Users shown to %s:\n", client->username);
+	printf("Online Users being shown to %s:\n", client->username);
 	for (node = users_q->head; node; node = node->next) {
-		printf("%s\n", (char *)node->data);
+		printf("\t- %s\n", (char *)node->data);
 	}
+	printf("shown\n>> ");
 }
 
 /*** Helper Functions ****************************************************/
@@ -361,4 +388,22 @@ char *client_strdup(char *s)
 	while ((c[i++] = s[j++]));
 
 	return c;
+}
+
+void read_line(FILE *f, char *line)
+{
+	int i;
+	for (i = 0; TRUE; i++) {
+		ch = (char)fgetc(f);
+		switch (ch) {
+			case EOF:
+				/* fall through */
+				printf("EOF");
+			case '\n':
+				line[i] = '\0';
+				return;
+			default:
+				line[i] = ch;
+		}
+	}
 }
