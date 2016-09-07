@@ -185,7 +185,7 @@ packet_t *receive_packet(int fd)
 	int r = 0;
 	int i = 0;
 	char sizebuffer[sizeof(int)];
-	char *b = (void *)sizebuffer;
+	char *b = (char *)sizebuffer;
 	int *intp;
 
 	r = read(fd, (void *)b, sizeof(int));
@@ -224,10 +224,17 @@ packet_t *receive_packet(int fd)
 	}
 	for (i = 0; i < size; i++) {
 		r = read(fd, (b + i), size - i);
+		printf("Read %d bytes of %d\n", r, size);
 		i += r;
 		if (r == -1) {
+			/*
 			fprintf(stderr, "Potentially weird!\n");
+			*/
+			/*
 			close(fd);
+			*/
+			printf("read -1\n");
+			break;
 		} else if (r == 0) {
 			printf("read 0\n");
 		}

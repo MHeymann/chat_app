@@ -10,12 +10,15 @@ HSET_OBJS 	= $(HTAB_OBJS) $(OBJ_DIR)/hashset/string_hashset.o $(OBJ_DIR)/hashset
 PACKET_OBJS = $(OBJ_DIR)/packet/packet.o $(OBJ_DIR)/packet/serializer.o
 QUEUE_OBJS 	= $(OBJ_DIR)/queue/queue.o
 USERS_OBJS	= $(OBJ_DIR)/server/users.o
-SOCKET_OBJS = $(OBJ_DIR)/server/server_speaker.o $(OBJ_DIR)/server/server_listener.o
-SERVER_OBJS = $(HSET_OBJS) $(PACKET_OBJS) $(QUEUE_OBJS) $(USERS_OBJS) $(SOCKET_OBJS) 
+SERVER_SOCKET_OBJS = $(OBJ_DIR)/server/server_speaker.o $(OBJ_DIR)/server/server_listener.o
+CLIENT_SOCKET_OBJS = $(OBJ_DIR)/client/client_speaker.o $(OBJ_DIR)/client/client_listener.o
+SERVER_OBJS = $(HSET_OBJS) $(PACKET_OBJS) $(QUEUE_OBJS) $(USERS_OBJS) $(SERVER_SOCKET_OBJS) 
+CLIENT_OBJS = $(PACKET_OBJS) $(QUEUE_OBJS) $(CLIENT_SOCKET_OBJS) 
+
 
 OBJS = $(SERVER_OBJS)
 TESTEXES = 
-EXES = server
+EXES = server client
 
 ### FLAGS #################################################################
 
@@ -37,6 +40,9 @@ tests: $(TESTEXES)
 
 #serialsolver: $(SRC_DIR)/server.c $(SERVER_OBJS)
 server: $(SERVER_OBJS) $(SRC_DIR)/server/chat_server.c
+	$(COMPILE) -o $@ $^ $(LFLAGS)
+
+client: $(CLIENT_OBJS) $(SRC_DIR)/client/chat_client.c
 	$(COMPILE) -o $@ $^ $(LFLAGS)
 
 $(OBJ_DIR)/%.o: $(SRC_DIR)/%.c

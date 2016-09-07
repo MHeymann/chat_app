@@ -7,6 +7,11 @@
 #include "server_listener.h"
 #include "server_speaker.h"
 
+
+char ch = '\0';
+
+void read_line(FILE *f, char *line);
+
 int main (void) 
 {
 	pthread_t listen_thread;
@@ -32,13 +37,26 @@ int main (void)
 	printf("Server running\n");
 
 	while(TRUE) {
+		/*
 		if (!scanf("%s", line)) {
-		;		
+			printf("Something weird in scanf\n");		
 		}
+		*/
+		read_line(stdin, line);
 		if (strcmp(line, "quit") == 0) {
+			break;
+		} else if(strcmp(line, "exit") == 0) {
 			break;
 		} else if(strcmp(line, "status") == 0) {
 			printf("Server running\n");
+		} else {
+			if (ch == EOF) {
+				printf("exit\n");
+				break;
+			} else {
+				printf("Didn't get that!\n");
+				printf("you said %s\n", line);
+			}
 		}
 	}
 
@@ -61,4 +79,21 @@ int main (void)
 	free(ports);
 
 	return 0;
+}
+
+void read_line(FILE *f, char *line)
+{
+	int i;
+	for (i = 0; TRUE; i++) {
+		ch = (char)fgetc(f);
+		switch (ch) {
+			case EOF:
+				/* fall through */
+			case '\n':
+				line[i] = '\0';
+				return;
+			default:
+				line[i] = ch;
+		}
+	}
 }
