@@ -64,7 +64,7 @@ int main (void)
 	speaker_stop(speaker);
 	printf("Joining speaker\n");
 	pthread_join(speak_thread, NULL);
-	printf("Joined listener\n");
+	printf("Joined speaker\n");
 	printf("Joining listener\n");
 	pthread_join(listen_thread, NULL);
 	printf("Joined listener\n");
