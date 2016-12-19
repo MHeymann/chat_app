@@ -130,6 +130,7 @@ void broadcast(server_speaker_t *speaker, packet_t *packet)
 				speak_strdup(packet->data), speak_strdup((char *)n->data));
 		add_packet_to_queue(speaker, copy);
 	}
+	free_queue(names);
 }
 
 void *speaker_run(void *s) 
