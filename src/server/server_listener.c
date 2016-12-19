@@ -290,13 +290,13 @@ void listener_go(server_listener_t *listener)
 				} else if (packet->code == LOGIN) {
 					if ((check_user_password(packet->name, packet->data)) && 
 							login_connection(listener->users, sd, packet->name)) {
-						p = new_packet(SEND, listen_strdup("admin"), listen_strdup("accept"), listen_strdup(packet->name));
+						p = new_packet(LOGIN, listen_strdup("admin"), listen_strdup("accept"), listen_strdup(packet->name));
 						send_packet(p, sd);
 						free_packet(p);
 						push_user_list(listener->speaker);
 						p = NULL;
 					} else {
-						p = new_packet(SEND, listen_strdup("admin"), listen_strdup("denial"), listen_strdup(packet->name));
+						p = new_packet(LOGIN, listen_strdup("admin"), listen_strdup("denial"), listen_strdup(packet->name));
 						send_packet(p, sd);
 						free_packet(p);
 						p = NULL;

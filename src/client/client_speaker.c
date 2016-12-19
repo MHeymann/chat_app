@@ -214,13 +214,20 @@ int speaker_login(client_speaker_t *speaker, char *pw)
 		"After select with only one sd set, this should be impossible\n");
 	}
 
-	packet = receive_packet(speaker->sd);
+	do {
+		if (packet) {
+			free_packet(packet);
+			packet = NULL;
+		}
+		packet = receive_packet(speaker->sd);
 
-	printf("Received response\n");
+		printf("Received response\n");
 	
-	if (packet == NULL)	{
-		return FALSE;
-	}
+		if (packet == NULL)	{
+			return FALSE;
+		}
+	} while (packet->code != LOGIN);
+
 	if (packet->data == NULL) {
 		return FALSE;
 	}
