@@ -142,16 +142,16 @@ void listener_go(client_listener_t *listener)
 			printf("server went offline\n");
 			break;
 		} else if(packet->code == SEND) {
-			sprintf(s, "%s: %s\n", packet->name, packet->data);
+			sprintf(s, "%s: %s", packet->name, packet->data);
 			client_append((chat_client_t *)listener->chat_client, s);
 		} else if(packet->code == ECHO) {
-			sprintf(s, "YOU echoed: %s\n", packet->data);
+			sprintf(s, "YOU echoed: %s", packet->data);
 			client_append((chat_client_t *)listener->chat_client, s);
 		} else if(packet->code == BROADCAST) {
 			if (strcmp(listener->name, packet->name) == 0) {
-				sprintf(s, "YOU Broadcast: %s\n", packet->data);
+				sprintf(s, "YOU Broadcast: %s", packet->data);
 			} else {
-				sprintf(s, "%s Broadcast: %s\n", packet->name, packet->data);
+				sprintf(s, "%s Broadcast: %s", packet->name, packet->data);
 			}
 			client_append((chat_client_t *)listener->chat_client, s);
 		} else if(packet->code == GET_ULIST) {

@@ -364,7 +364,7 @@ void client_append(chat_client_t *client, char *s)
 	if (!client) {
 		return;
 	}
-	printf("\n%s>> \n", s);
+	printf("\n%s\n>> \n\b", s);
 }
 
 void client_show_online_users(chat_client_t *client, queue_t *users_q)
