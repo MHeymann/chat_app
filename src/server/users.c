@@ -167,13 +167,11 @@ int login_connection(users_t *users, int fd, char *name)
 {
 	pthread_mutex_lock(users->hs_protect);
 
-	printf("insertion\n");
 	if (!string_hashset_insert(users->names, name, fd)) {
 		printf("failed to insert into name list\n");
 		pthread_mutex_unlock(users->hs_protect);
 		return 0;
 	}
-	printf("update\n");
 	fd_hashset_update(users->sockets, fd, name);
 
 	pthread_mutex_unlock(users->hs_protect);

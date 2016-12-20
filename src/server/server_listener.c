@@ -260,7 +260,7 @@ void listener_go(server_listener_t *listener)
 
 		/* IO on other sockets */
 		for (n = online_list2->head; n; n = n->next) {
-			printf("iterating online list %ld\n", (long)n->data);
+			 /* printf("iterating online list %ld\n", (long)n->data); */
 			sd = (int)((long)n->data);
 			if (sd <= 0) {
 				printf("this shouldn't be possible when translating a name to an sd.\n");
@@ -296,14 +296,15 @@ void listener_go(server_listener_t *listener)
 						push_user_list(listener->speaker);
 						p = NULL;
 					} else {
+						printf("denying access\n");
 						p = new_packet(LOGIN, listen_strdup("admin"), listen_strdup("denial"), listen_strdup(packet->name));
 						send_packet(p, sd);
 						free_packet(p);
 						p = NULL;
 						close(sd);
-						printf("closed\n");
+						printf("closed connection\n");
 						fd_hashset_remove(listener->users->sockets, sd);
-						printf("removed\n");
+						printf("removed from hashset\n");
 					}
 
 				} else if (packet->code == GET_ULIST) {

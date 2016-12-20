@@ -224,12 +224,8 @@ packet_t *receive_packet(int fd)
 	}
 	for (i = 0; i < size; i++) {
 		r = read(fd, (b + i), size - i);
-		printf("Read %d bytes of %d\n", r, size);
 		i += r;
 		if (r == -1) {
-			/*
-			fprintf(stderr, "Potentially weird!\n");
-			*/
 			/*
 			close(fd);
 			*/
