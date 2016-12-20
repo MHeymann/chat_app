@@ -114,9 +114,7 @@ int fd_hashset_insert(fd_hashset_ptr hs, int fdkey, char *svalue)
 	}
 
 	fdl = fdkey;
-	printf("about to insert fd into table\n");
 	insert_status = ht_insert(hs->ht, (void *)fdl, (void *)scopy);
-	printf("inserted fd into table\n");
 	if (insert_status) {
 		switch (insert_status) {
 			case 1:

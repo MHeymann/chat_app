@@ -99,7 +99,6 @@ int string_hashset_insert(string_hashset_ptr hs, char *skey, int fdvalue)
 	if (!scopy) {
 		fprintf(stderr, "failed to copy string\n");
 	}
-	printf("trying to insert string\n");
 
 	fdl = fdvalue;
 	insert_status = ht_insert(hs->ht, (void *)scopy, (void *)fdl);
@@ -125,7 +124,6 @@ int string_hashset_insert(string_hashset_ptr hs, char *skey, int fdvalue)
 		printf("returning fail %d\n", FAIL);
 		return FAIL;
 	} else {
-		printf("returning success\n");
 		return SUCCESS;
 	}
 }
