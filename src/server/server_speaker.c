@@ -104,6 +104,7 @@ void push_user_list(server_speaker_t *speaker)
 
 	names = get_names(speaker->users);
 
+	printf("Pushing updated list of online users\n");
 	for (n = names->head; n; n = n->next) {
 		packet = NULL;
 		packet = new_packet(GET_ULIST, speak_strdup((char *)n->data), NULL, speak_strdup((char *)n->data));
@@ -211,7 +212,6 @@ void speaker_go(server_speaker_t *speaker)
 			free(packet->name);
 			packet->name = NULL;
 			packet->name_len = 0;
-			printf("Sending list of online users to %s\n", packet->to);
 		}
 		users_send_packet(speaker->users, packet);
 		free_packet(packet);
