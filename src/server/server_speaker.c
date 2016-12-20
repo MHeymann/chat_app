@@ -120,9 +120,18 @@ void push_user_list(server_speaker_t *speaker)
 void broadcast(server_speaker_t *speaker, packet_t *packet)
 {
 	packet_t *copy;
-	queue_t *names = get_names(speaker->users);
+	queue_t *names = NULL;
 	node_t *n = NULL;
 
+	if (packet->name == NULL) {
+		return;
+	}
+	if (packet->data == NULL) {
+		printf(
+			"%s tried to broadcast an empty message. Dropping packet\n", packet->name);
+		return;
+	}
+	names = get_names(speaker->users);
 	printf("%s is broadcasting %s\n", packet->name, packet->data);
 	for (n = names->head; n; n = n->next) {
 		printf("%s to be added for broadcasting\n", (char *)n->data);
