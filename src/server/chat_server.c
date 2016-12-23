@@ -11,8 +11,9 @@
 char ch = '\0';
 
 void read_line(FILE *f, char *line);
+void get_args(int argc, char *argv[], int **ports, int *port_count);
 
-int main (void) 
+int main(int argc, char *argv[]) 
 {
 	pthread_t listen_thread;
 	pthread_t speak_thread;
@@ -21,15 +22,15 @@ int main (void)
 	server_listener_t *listener;
 	int *ports;
 	char line[100];
+	int port_count = 0;
 
-	ports = malloc(sizeof(int));
-	ports[0] = 8002;
+	get_args(argc, argv, &ports, &port_count);	
 
 	printf("Starting up server\n");
 
 	users = new_users();
 	speaker = new_server_speaker(users);
-	listener = new_server_listener(ports, 1, users, speaker);
+	listener = new_server_listener(ports, port_count, users, speaker);
 
 	pthread_create(&listen_thread, NULL, listener_run, (void *)listener);
 	pthread_create(&speak_thread, NULL, speaker_run, (void *)speaker);
@@ -94,6 +95,33 @@ void read_line(FILE *f, char *line)
 				return;
 			default:
 				line[i] = ch;
+		}
+	}
+}
+
+
+void get_args(int argc, char *argv[], int **ports, int *port_count)
+{
+	int i = 0;
+	char *endptr = NULL;
+	if (argc <= 1) {
+		*port_count = 1;
+		*ports = malloc(sizeof(int));
+		(*ports)[0] = 8002;
+		printf("defaulting to port %d", (*ports)[0]);
+	} else {
+		*port_count = argc - 1;
+		*ports = malloc(sizeof(int) * *port_count);
+		for (i = 0; i < *port_count; i++) {
+			printf("%d %s\n", i, argv[i + 1]);
+			(*ports)[i] = strtol(argv[i + 1], &endptr, 10);
+			printf("%d set for binding\n", (*ports)[i]);
+			if (argv[i + 1] == endptr) {
+				printf("please provide valid integers as arguments\n");
+				printf("you erroneously provided '%s' as argument %d\n",
+						argv[i + 1], i + 1);
+				exit(1);
+			}
 		}
 	}
 }
