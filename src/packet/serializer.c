@@ -234,11 +234,18 @@ char *read_string_from_buffer(char *bytes, int *global_index, int length)
 
 int cmp(void *a, void *b) 
 {
+	int i = 0;
+	char *A = a;
+	char *B = b;
+	for (i = 0; A[i] == B[i]; i++);
+	return (int)(A[i] - B[i]);
+	/*
 	if (a == b) {
 		return 0;
 	} else {
 		return 0;
 	}
+	*/
 }
 
 void write_int_to_buffer(char *buffer, int *global_index, int integer)
